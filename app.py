@@ -4,7 +4,7 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
-app = Flask(__name__, template_folder=BASE_DIR, static_folder=BASE_DIR)
+app = Flask(__name__)
 app.secret_key = 'bookhole_super_secret_key'
 app.config['UPLOAD_FOLDER'] = 'static/uploads'
 
