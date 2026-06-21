@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, request, redirect, url_for, session
 from werkzeug.security import generate_password_hash, check_password_hash
 
@@ -83,6 +83,10 @@ def init_user_top_books():
 init_discussion_tables()
 init_user_top_books()
 
+# ===== 輔助函數：取得台灣時間 =====
+def get_tw_now():
+    return (datetime.utcnow() + timedelta(hours=8)).strftime('%m/%d %H:%M')
+
 # ===== 登入與註冊 =====
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -149,10 +153,8 @@ def profile():
     user = conn.execute('SELECT * FROM Users WHERE id = ?', (session['user_id'],)).fetchone()
     conn.close()
     
-    # 這裡已經不需要再抓 Library 的書了，因為我們有獨立的欄位
     return render_template('profile.html', user=user)
 
-# 專門更新個人主頁 TOP 3 書籍封面的獨立路由
 @app.route('/update_top_book/<int:slot>', methods=['POST'])
 def update_top_book(slot):
     if 'user_id' not in session: return redirect(url_for('login'))
@@ -164,7 +166,6 @@ def update_top_book(slot):
         img_file.save(os.path.join(app.config['UPLOAD_FOLDER'], img_filename))
 
         conn = get_db_connection()
-        # 動態指定更新 top1_img, top2_img 還是 top3_img
         column_name = f'top{slot}_img'
         conn.execute(f'UPDATE Users SET {column_name} = ? WHERE id = ?', (img_filename, session['user_id']))
         conn.commit()
@@ -233,13 +234,11 @@ def edit_book(book_id):
     conn.close()
     return redirect(url_for('library'))
 
-# 新增：刪除書籍的路由
 @app.route('/delete_book/<int:book_id>')
 def delete_book(book_id):
     if 'user_id' not in session: return redirect(url_for('login'))
     
     conn = get_db_connection()
-    # 確保只有該書籍的擁有者才能刪除
     conn.execute('DELETE FROM Library WHERE id = ? AND user_id = ?', (book_id, session['user_id']))
     conn.commit()
     conn.close()
@@ -294,12 +293,12 @@ def discussion():
     if request.method == 'POST':
         book_id = request.form.get('book_id')
         viewpoint = request.form.get('viewpoint')
-        current_time = datetime.now().strftime('%m/%d %H:%M')
+        tw_time = get_tw_now() # 使用正確的台灣時間
         
         if book_id:
             book = conn.execute('SELECT title, author FROM Books WHERE id = ?', (book_id,)).fetchone()
             conn.execute('INSERT INTO Discussions (book_id, user_id, title, author, viewpoint, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-                         (book_id, session['user_id'], book['title'], book['author'], viewpoint, current_time))
+                         (book_id, session['user_id'], book['title'], book['author'], viewpoint, tw_time))
         else:
             title = request.form.get('title')
             author = request.form.get('author')
@@ -313,7 +312,7 @@ def discussion():
                 b_id = cursor.lastrowid
                 
             conn.execute('INSERT INTO Discussions (book_id, user_id, title, author, viewpoint, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-                         (b_id, session['user_id'], title, author, viewpoint, current_time))
+                         (b_id, session['user_id'], title, author, viewpoint, tw_time))
             
         conn.commit()
         conn.close()
@@ -357,9 +356,9 @@ def add_comment(discussion_id):
     content = request.form.get('content')
     if content:
         conn = get_db_connection()
-        current_time = datetime.now().strftime('%m/%d %H:%M')
+        tw_time = get_tw_now() # 使用正確的台灣時間
         conn.execute('INSERT INTO Comments (discussion_id, user_id, content, created_at) VALUES (?, ?, ?, ?)',
-                     (discussion_id, session['user_id'], content, current_time))
+                     (discussion_id, session['user_id'], content, tw_time))
         conn.commit()
         conn.close()
     return redirect(url_for('discussion'))
